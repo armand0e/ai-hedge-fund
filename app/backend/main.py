@@ -8,6 +8,7 @@ from app.backend.routes import api_router
 from app.backend.database.connection import engine
 from app.backend.database.models import Base
 from app.backend.services.ollama_service import ollama_service
+from app.backend.config import get_settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +19,9 @@ app = FastAPI(title="AI Hedge Fund API", description="Backend API for AI Hedge F
 # Initialize database tables (this is safe to run multiple times)
 Base.metadata.create_all(bind=engine)
 
+# Load settings (environment variables with optional .env fallback)
+settings = get_settings()
+
 # Configure CORS
 default_origins = {
     "http://localhost:5173",
@@ -26,12 +30,17 @@ default_origins = {
     "https://127.0.0.1:5173",
 }
 
-frontend_origin_env = os.getenv("FRONTEND_ORIGIN", "")
-if frontend_origin_env:
-    # Support comma-separated list of origins
-    configured_origins = {origin.strip() for origin in frontend_origin_env.split(",") if origin.strip()}
-else:
-    configured_origins = set()
+configured_origins = set()
+
+if settings.frontend_origin:
+    configured_origins.update(
+        origin.strip()
+        for origin in settings.frontend_origin.split(",")
+        if origin.strip()
+    )
+
+if settings.public_url:
+    configured_origins.add(settings.public_url.rstrip("/"))
 
 allow_origins = list(default_origins.union(configured_origins))
 

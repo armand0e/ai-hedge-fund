@@ -16,7 +16,7 @@ services:
       BACKEND_PORT: ${BACKEND_PORT:-8000}
       FRONTEND_HOST: 0.0.0.0
       FRONTEND_PORT: ${FRONTEND_PORT:-5173}
-      NODE_ENV: production
+      NPM_CONFIG_PRODUCTION: "false"
       # Provider keys
       FINANCIAL_DATASETS_API_KEY: ${FINANCIAL_DATASETS_API_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
@@ -32,6 +32,9 @@ services:
       AZURE_OPENAI_DEPLOYMENT_NAME: ${AZURE_OPENAI_DEPLOYMENT_NAME}
       # Disable auto-opening the browser in containers
       DISABLE_BROWSER: "1"
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+      - "${BACKEND_PORT:-8000}:8000"
     restart: unless-stopped
 
 networks:
