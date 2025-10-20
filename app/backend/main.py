@@ -1,3 +1,5 @@
+import os
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -18,9 +20,25 @@ app = FastAPI(title="AI Hedge Fund API", description="Backend API for AI Hedge F
 Base.metadata.create_all(bind=engine)
 
 # Configure CORS
+default_origins = {
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://localhost:5173",
+    "https://127.0.0.1:5173",
+}
+
+frontend_origin_env = os.getenv("FRONTEND_ORIGIN", "")
+if frontend_origin_env:
+    # Support comma-separated list of origins
+    configured_origins = {origin.strip() for origin in frontend_origin_env.split(",") if origin.strip()}
+else:
+    configured_origins = set()
+
+allow_origins = list(default_origins.union(configured_origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # Frontend URLs
+    allow_origins=allow_origins,  # Frontend URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
