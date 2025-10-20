@@ -34,14 +34,15 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Function to open browser
+# Function to open browser (skipped when DISABLE_BROWSER=1)
 open_browser() {
     local url="$1"
+    if [[ "${DISABLE_BROWSER:-0}" == "1" ]]; then
+        return 0
+    fi
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
         open "$url"
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        # Linux
         if command_exists xdg-open; then
             xdg-open "$url"
         elif command_exists firefox; then
@@ -52,7 +53,6 @@ open_browser() {
             chromium "$url" &
         fi
     elif [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "msys" ]]; then
-        # Windows
         start "$url"
     fi
 }
@@ -250,7 +250,7 @@ start_services() {
     print_status "Starting backend server..."
     # Run from the app directory (parent of backend) to ensure proper Python imports
     cd ..
-    poetry run uvicorn app.backend.main:app --reload --host 127.0.0.1 --port 8000 > "$LOG_DIR/backend.log" 2>&1 &
+    poetry run uvicorn app.backend.main:app --host ${BACKEND_HOST:-0.0.0.0} --port ${BACKEND_PORT:-8000} > "$LOG_DIR/backend.log" 2>&1 &
     BACKEND_PID=$!
     cd app
     
@@ -279,7 +279,7 @@ start_services() {
     # Start frontend
     print_status "Starting frontend development server..."
     cd frontend
-    npm run dev > "$FRONTEND_LOG" 2>&1 &
+    npm run dev -- --host ${FRONTEND_HOST:-0.0.0.0} --port ${FRONTEND_PORT:-5173} > "$FRONTEND_LOG" 2>&1 &
     FRONTEND_PID=$!
     cd ..
     
@@ -297,17 +297,17 @@ start_services() {
     print_success "Frontend development server started (PID: $FRONTEND_PID)"
     
     # Open browser after frontend is running
-    print_status "Opening web browser..."
+    print_status "Opening web browser (if enabled)..."
     sleep 2  # Give frontend a moment to fully start
-    open_browser "http://localhost:5173"
+    open_browser "http://${FRONTEND_HOST:-localhost}:${FRONTEND_PORT:-5173}"
     
     echo ""
     print_success "🚀 AI Hedge Fund web application is now running!"
     print_success "🌐 Browser should open automatically to http://localhost:5173"
     echo ""
-    print_status "Frontend (Web Interface): http://localhost:5173"
-    print_status "Backend (API): http://localhost:8000"
-    print_status "API Documentation: http://localhost:8000/docs"
+    print_status "Frontend (Web Interface): http://${FRONTEND_HOST:-localhost}:${FRONTEND_PORT:-5173}"
+    print_status "Backend (API): http://${BACKEND_HOST:-localhost}:${BACKEND_PORT:-8000}"
+    print_status "API Documentation: http://${BACKEND_HOST:-localhost}:${BACKEND_PORT:-8000}/docs"
     print_status "Database: SQLite (hedge_fund.db in project root)"
     echo ""
     print_status "Press Ctrl+C to stop both services"
