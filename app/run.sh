@@ -281,6 +281,7 @@ start_services() {
         # Start frontend dev server
         print_status "Starting frontend development server..."
         cd frontend
+        export VITE_API_URL="${VITE_API_URL:-http://127.0.0.1:${BACKEND_PORT:-8000}}"
         npm run dev -- --host ${FRONTEND_HOST:-0.0.0.0} --port ${FRONTEND_PORT:-5173} > "$FRONTEND_LOG" 2>&1 &
         FRONTEND_PID=$!
         cd ..
