@@ -1,6 +1,9 @@
 import os
-from fastapi import FastAPI
+from pathlib import Path
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import logging
 import asyncio
 
@@ -52,8 +55,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include all routes
-app.include_router(api_router)
+# Include all routes under /api to enable single-origin deployment
+app.include_router(api_router, prefix="/api")
+
+# Serve built frontend if available
+project_root = Path(__file__).resolve().parents[2]
+dist_dir_env = os.getenv("FRONTEND_DIST_DIR")
+dist_dir = Path(dist_dir_env) if dist_dir_env else project_root / "app" / "frontend" / "dist"
+
+if dist_dir.exists():
+    # Mount the built assets (Vite outputs assets/ and index.html)
+    app.mount("/assets", StaticFiles(directory=str(dist_dir / "assets"), html=False), name="assets")
+
+    @app.get("/")
+    async def serve_index_root():
+        return FileResponse(str(dist_dir / "index.html"))
+
+    # SPA fallback for non-API routes
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        if full_path.startswith("api/"):
+            # Let unmatched API routes 404
+            return Response(status_code=404)
+        return FileResponse(str(dist_dir / "index.html"))
 
 @app.on_event("startup")
 async def startup_event():

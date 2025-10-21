@@ -72,14 +72,15 @@ check_prerequisites() {
     
     local missing_deps=()
     
-    # Check for Node.js
-    if ! command_exists node; then
-        missing_deps+=("Node.js (https://nodejs.org/)")
-    fi
-    
-    # Check for npm
-    if ! command_exists npm; then
-        missing_deps+=("npm (comes with Node.js)")
+    if [[ "${FRONTEND_DEV:-1}" == "1" ]]; then
+        # Check for Node.js only when running the dev server
+        if ! command_exists node; then
+            missing_deps+=("Node.js (https://nodejs.org/)")
+        fi
+        # Check for npm
+        if ! command_exists npm; then
+            missing_deps+=("npm (comes with Node.js)")
+        fi
     fi
     
     # Check for Python
@@ -175,13 +176,13 @@ install_backend() {
     
     cd backend
     
-    # Check if dependencies are actually installed and working
-    if poetry run python -c "import uvicorn; import fastapi" >/dev/null 2>&1; then
+    # Check if dependencies are actually installed and working (include pydantic_settings)
+    if poetry run python -c "import uvicorn; import fastapi; import pydantic_settings" >/dev/null 2>&1; then
         print_success "Backend dependencies already installed!"
     else
         print_status "Installing Python dependencies with Poetry..."
-        poetry install
-        if poetry run python -c "import uvicorn; import fastapi" >/dev/null 2>&1; then
+        poetry install --sync
+        if poetry run python -c "import uvicorn; import fastapi; import pydantic_settings" >/dev/null 2>&1; then
             print_success "Backend dependencies installed!"
         else
             print_error "Failed to install backend dependencies properly"
@@ -195,11 +196,12 @@ install_backend() {
 
 # Function to install frontend dependencies
 install_frontend() {
+    if [[ "${FRONTEND_DEV:-1}" != "1" ]]; then
+        print_status "Skipping frontend dependency install (FRONTEND_DEV=0)"
+        return 0
+    fi
     print_status "Installing frontend dependencies..."
-    
     cd frontend
-    
-    # Check if node_modules exists and has content
     if [[ -d "node_modules" ]] && [[ -n "$(ls -A node_modules 2>/dev/null)" ]]; then
         print_success "Frontend dependencies already installed!"
     else
@@ -207,7 +209,6 @@ install_frontend() {
         npm install
         print_success "Frontend dependencies installed!"
     fi
-    
     cd ..
 }
 
@@ -276,30 +277,33 @@ start_services() {
         print_warning "Database file not found, but will be created on first API call"
     fi
     
-    # Start frontend
-    print_status "Starting frontend development server..."
-    cd frontend
-    npm run dev -- --host ${FRONTEND_HOST:-0.0.0.0} --port ${FRONTEND_PORT:-5173} > "$FRONTEND_LOG" 2>&1 &
-    FRONTEND_PID=$!
-    cd ..
-    
-    # Wait a moment for frontend to start
-    sleep 5
-    
-    # Check if frontend started successfully
-    if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
-        print_error "Frontend failed to start. Check the logs:"
-        cat "$FRONTEND_LOG"
-        cleanup
-        exit 1
+    if [[ "${FRONTEND_DEV:-1}" == "1" ]]; then
+        # Start frontend dev server
+        print_status "Starting frontend development server..."
+        cd frontend
+        npm run dev -- --host ${FRONTEND_HOST:-0.0.0.0} --port ${FRONTEND_PORT:-5173} > "$FRONTEND_LOG" 2>&1 &
+        FRONTEND_PID=$!
+        cd ..
+        sleep 5
+        if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
+            print_error "Frontend failed to start. Check the logs:"
+            cat "$FRONTEND_LOG"
+            cleanup
+            exit 1
+        fi
+        print_success "Frontend development server started (PID: $FRONTEND_PID)"
+    else
+        print_status "Skipping frontend dev server (FRONTEND_DEV=0). Backend will serve built frontend if present."
     fi
-    
-    print_success "Frontend development server started (PID: $FRONTEND_PID)"
     
     # Open browser after frontend is running
     print_status "Opening web browser (if enabled)..."
     sleep 2  # Give frontend a moment to fully start
-    open_browser "http://${FRONTEND_HOST:-localhost}:${FRONTEND_PORT:-5173}"
+    if [[ "${FRONTEND_DEV:-1}" == "1" ]]; then
+        open_browser "http://${FRONTEND_HOST:-localhost}:${FRONTEND_PORT:-5173}"
+    else
+        open_browser "http://${BACKEND_HOST:-localhost}:${BACKEND_PORT:-8000}"
+    fi
     
     echo ""
     print_success "🚀 AI Hedge Fund web application is now running!"
@@ -321,9 +325,11 @@ start_services() {
             break
         fi
         
-        if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
-            print_error "Frontend process died unexpectedly"
-            break
+        if [[ "${FRONTEND_DEV:-1}" == "1" ]]; then
+            if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
+                print_error "Frontend process died unexpectedly"
+                break
+            fi
         fi
         
         sleep 1

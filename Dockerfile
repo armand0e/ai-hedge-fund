@@ -24,7 +24,12 @@ RUN poetry install --no-interaction --no-ansi
 # Copy project
 COPY . /app/
 
+# Build frontend assets (production)
+WORKDIR /app/app/frontend
+RUN npm ci && npm run build
+
 # Ensure run script is executable
+WORKDIR /app
 RUN chmod +x /app/app/run.sh
 
 # Default container runtime settings for dev servers
@@ -32,7 +37,8 @@ ENV DISABLE_BROWSER=1 \
     BACKEND_HOST=0.0.0.0 \
     BACKEND_PORT=8000 \
     FRONTEND_HOST=0.0.0.0 \
-    FRONTEND_PORT=5173
+    FRONTEND_PORT=5173 \
+    FRONTEND_DEV=0
 
 EXPOSE 5173 8000
 
